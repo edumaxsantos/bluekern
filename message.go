@@ -53,6 +53,41 @@ type Message struct {
 	ETX      byte
 }
 
+type Builder struct {
+	Version byte
+	Pin     string
+	IO      IO
+	RW      RW
+	Data    []byte
+}
+
+func CreateMessage(builder *Builder) (*Message, error) {
+	if builder == nil {
+		return nil, errors.New("message builder is nil")
+	}
+
+	pin, err := GetPin(builder.Pin)
+
+	if err != nil {
+		return nil, err
+	}
+
+	msg := &Message{
+		STX:     STX,
+		Version: builder.Version,
+		Pin:     byte(pin),
+		IO:      builder.IO,
+		RW:      builder.RW,
+		Data:    builder.Data,
+		Length:  byte(len(builder.Data)),
+		ETX:     ETX,
+	}
+
+	msg.Checksum = calculateChecksum(msg.ChecksumData())
+
+	return msg, nil
+}
+
 // calculateChecksum use the following fields to generate checksum:
 // Message.Version, Message.Pin, Message.IO, Message.RW,
 // Message.Length, Message.Data
@@ -89,13 +124,13 @@ func (m *Message) Encode() []byte {
 
 	msg := append(header, m.Data...)
 
-	checksum := calculateChecksum(m.checksumData())
+	checksum := calculateChecksum(m.ChecksumData())
 	msg = append(msg, checksum, m.ETX)
 
 	return msg
 }
 
-func (m *Message) checksumData() []byte {
+func (m *Message) ChecksumData() []byte {
 	return append([]byte{m.Version, m.Pin, byte(m.IO), byte(m.RW), m.Length}, m.Data...)
 }
 
@@ -136,7 +171,7 @@ func Decode(encoded []byte) (*Message, error) {
 
 	checkSum := encoded[3+length]
 
-	calculatedChecksum := calculateChecksum(message.checksumData())
+	calculatedChecksum := calculateChecksum(message.ChecksumData())
 
 	if checkSum != calculatedChecksum {
 		return nil, errors.New("checksum mismatch")
